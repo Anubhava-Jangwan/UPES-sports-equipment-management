@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  STUDENT
+  FACULTY
+  COACH
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+enum EquipmentCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  DAMAGED
+  UNDER_MAINTENANCE
+}
+
+enum EquipmentStatus {
+  AVAILABLE
+  ISSUED
+  RESERVED
+  LOST
+  RETIRED
+}
+
+enum IssueStatus {
+  REQUESTED
+  APPROVED
+  ACTIVE
+  RETURNED
+  OVERDUE
+  REJECTED
+  CANCELLED
+}
+
+model User {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  sapId        String      @unique @map("sap_id")
+  passwordHash String      @map("password_hash")
+  fullName     String      @map("full_name")
+  phone        String?
+  role         UserRole    @default(STUDENT)
+  status       UserStatus  @default(ACTIVE)
+  department   String?
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  issues       IssueRecord[] @relation("UserIssues")
+  approvedIssues IssueRecord[] @relation("AdminIssues")
+  auditLogs    AuditLog[]
+
+  @@map("users")
+}
+
+model Category {
+  id          String          @id @default(uuid())
+  name        String          @unique
+  code        String          @unique
+  description String?
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  equipments  EquipmentItem[]
+
+  @@map("categories")
+}
+
+model EquipmentItem {
+  id             String             @id @default(uuid())
+  qrCode         String             @unique @map("qr_code")
+  name           String
+  categoryId     String             @map("category_id")
+  category       Category           @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  condition      EquipmentCondition @default(EXCELLENT)
+  status         EquipmentStatus    @default(AVAILABLE)
+  location       String             @default("Main Sports Complex")
+  specifications Json?
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  issues         IssueRecord[]
+
+  @@index([qrCode])
+  @@index([status])
+  @@map("equipment_items")
+}
+
+model IssueRecord {
+  id                 String      @id @default(uuid())
+  userId             String      @map("user_id")
+  user               User        @relation("UserIssues", fields: [userId], references: [id], onDelete: Restrict)
+  equipmentId        String      @map("equipment_id")
+  equipment          EquipmentItem @relation(fields: [equipmentId], references: [id], onDelete: Restrict)
+  issueDate          DateTime    @default(now()) @map("issue_date")
+  expectedReturnDate DateTime    @map("expected_return_date")
+  actualReturnDate   DateTime?   @map("actual_return_date")
+  status             IssueStatus @default(REQUESTED)
+  issuedByAdminId    String?     @map("issued_by_admin_id")
+  issuedByAdmin      User?       @relation("AdminIssues", fields: [issuedByAdminId], references: [id])
+  receivedByAdminId  String?     @map("received_by_admin_id")
+  fineAmount         Decimal?    @default(0.00) @map("fine_amount") @db.Decimal(10, 2)
+  remarks            String?
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([equipmentId])
+  @@index([status])
+  @@map("issue_records")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?  @map("user_id")
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  resource   String
+  resourceId String?  @map("resource_id")
+  details    Json?
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+}
